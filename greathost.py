@@ -105,7 +105,7 @@ class GH:
         info = self.api(f"/api/servers/{sid}/information")
         st = info.get("status", "unknown").lower()
         icon, name = STATUS_MAP.get(st, ["❓", st])
-        print(f"📋 状态核对: {TARGET_NAME} | {icon} {name}")
+        #print(f"📋 状态核对: {TARGET_NAME} | {icon} {name}")
         return icon, name
 
     def get_renew_info(self, sid):
