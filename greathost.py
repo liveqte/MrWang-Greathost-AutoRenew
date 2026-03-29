@@ -44,7 +44,9 @@ def send_notice(kind, fields):
         "maxed_out": "🈵 <b>GreatHost 已达上限</b>",
         "cooldown": "⏳ <b>GreatHost 还在冷却中</b>",
         "renew_failed": "⚠️ <b>GreatHost 续期未生效</b>",
-        "error": "🚨 <b>GreatHost 脚本报错</b>"
+        "error": "🚨 <b>GreatHost 脚本报错</b>",
+        "auto_start_success": "⚡ <b>GreatHost 自动开机成功</b>",  # ← 新增
+        "auto_start_failed": "⚠️ <b>GreatHost 自动开机失败</b>"     # ← 新增
     }
     body = "\n".join([f"{e} {k}: {v}" for e, k, v in fields])
     msg = f"{titles.get(kind, '📢 通知')}\n\n{body}\n📅 时间: {now_shanghai()}"
@@ -74,11 +76,25 @@ class GH:
         self.d = webdriver.Chrome(options=opts, seleniumwire_options=proxy)
         self.w = WebDriverWait(self.d, 25)
 
-    def api(self, url, method="GET"):
+    def api(self, url, method="GET", data=None):
         print(f"📡 API 调用 [{method}] {url}")
-        script = f"return fetch('{url}',{{method:'{method}'}}).then(r=>r.json()).catch(e=>({{success:false,message:e.toString()}}))"
+        if data:
+            body = f",body:JSON.stringify({json.dumps(data)})"
+        else:
+            body = ""
+        script = f"""
+        return fetch('{url}',{{
+            method:'{method}'{body},
+            headers:{{'Content-Type':'application/json'}}
+        }}).then(r=>r.json()).catch(e=>({{success:false,message:e.toString()}}))
+        """
         return self.d.execute_script(script)
-
+        
+    def start_server(self, sid):
+        """执行服务器开机操作"""
+        print(f"⚡ 正在执行开机: {sid}")
+        return self.api(f"/api/servers/{sid}/power", method="POST", data={"action": "start"})
+        
     def get_ip(self):
         try:
             self.d.get("https://api.ipify.org?format=json")
@@ -105,7 +121,7 @@ class GH:
         info = self.api(f"/api/servers/{sid}/information")
         st = info.get("status", "unknown").lower()
         icon, name = STATUS_MAP.get(st, ["❓", st])
-        #print(f"📋 状态核对: {TARGET_NAME} | {icon} {name}")
+        print(f"📋 状态核对: {TARGET_NAME} | {icon} {name}")
         return icon, name
 
     def get_renew_info(self, sid):
@@ -141,7 +157,32 @@ def run():
 
         icon, stname = gh.get_status(sid)
         status_disp = f"{icon} {stname}"
-
+        
+        # 🔌 自动开机逻辑
+        if stname.lower() == "stopped":
+            print(f"🔄 检测到服务器已停止，正在自动开机...")
+            start_res = gh.start_server(sid)
+            if start_res.get("success"):
+                print(f"✅ 开机指令发送成功")
+                send_notice("auto_start_success", [
+                    ("📛","服务器名称",TARGET_NAME),
+                    ("🆔","ID",f"<code>{sid}</code>"),
+                    ("⚡","操作","自动开机成功"),
+                    ("🚀","新状态","🟡 Starting"),
+                    ("🌐","落地 IP",f"<code>{ip}</code>")
+                ])
+                time.sleep(5)  # 等待状态同步
+                icon, stname = gh.get_status(sid)
+                status_disp = f"{icon} {stname}"
+            else:
+                print(f"⚠️ 开机指令发送失败: {start_res.get('message')}")
+                send_notice("auto_start_failed", [
+                    ("📛","服务器名称",TARGET_NAME),
+                    ("🆔","ID",f"<code>{sid}</code>"),
+                    ("❌","错误信息",f"<code>{start_res.get('message', 'Unknown')}</code>"),
+                    ("🚀","当前状态",status_disp)
+                ])
+                
         info = gh.get_renew_info(sid)
         before = calculate_hours(info.get("nextRenewalDate"))
 
