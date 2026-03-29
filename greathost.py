@@ -23,6 +23,7 @@ STATUS_MAP = {
     "offline": ["⚪", "Offline"],
     "suspended": ["🚫", "Suspended"]
 }
+AUTO_START_STATES = {"stopped", "offline", "suspended"}
 
 def now_shanghai():
     return datetime.now(ZoneInfo("Asia/Shanghai")).strftime('%Y/%m/%d %H:%M:%S')
@@ -159,7 +160,7 @@ def run():
         status_disp = f"{icon} {stname}"
         
         # 🔌 自动开机逻辑
-        if stname.lower() == "stopped":
+        if stname.lower() in AUTO_START_STATES:
             print(f"🔄 检测到服务器已停止，正在自动开机...")
             start_res = gh.start_server(sid)
             if start_res.get("success"):
