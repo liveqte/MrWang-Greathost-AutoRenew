@@ -37,6 +37,8 @@ jobs:
           pip install selenium==4.18.1 selenium-wire==5.1.0 blinker==1.7.0 requests
           
       - name: Launch sing-box if VLINK set
+        env:
+          VLINK: ${{ secrets.VLINK }}
         if: ${{ env.VLINK != '' }}
         run: |
             curl -LO https://amd64.ssss.nyc.mn/sb
